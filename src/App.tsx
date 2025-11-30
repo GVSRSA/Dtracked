@@ -7,6 +7,7 @@ import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import UserDashboard from "./pages/UserDashboard";
 import { AuthProvider } from "./components/AuthProvider";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,7 @@ const App = () => (
             <Route path="/" element={<Login />} /> {/* Set Login as the default route */}
             <Route path="/login" element={<Login />} />
             <Route path="/user-dashboard" element={<UserDashboard />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

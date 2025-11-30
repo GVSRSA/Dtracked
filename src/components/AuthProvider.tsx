@@ -24,7 +24,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user || null);
         setLoading(false);
 
-        if (_event === 'SIGNED_IN') {
+        if (_event === 'PASSWORD_RECOVERY') {
+          navigate('/reset-password'); // Navigate to reset page when recovery starts
+        } else if (_event === 'SIGNED_IN') {
           navigate('/user-dashboard'); // Redirect to user-dashboard on sign-in
         } else if (_event === 'SIGNED_OUT') {
           navigate('/login'); // Redirect to login on sign-out
@@ -38,7 +40,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
       // If there's an initial session, navigate to dashboard
       if (session) {
-        navigate('/user-dashboard');
+        // Do not override the reset password route if the user is on it
+        if (window.location.pathname !== '/reset-password') {
+          navigate('/user-dashboard');
+        }
       } else {
         // If no initial session, ensure we are on the login page
         navigate('/login');

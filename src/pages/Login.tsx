@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 // Removed useNavigate as AuthProvider now handles redirection after login
+import ResetPasswordDialog from '@/components/ResetPasswordDialog';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -72,11 +73,14 @@ const Login: React.FC = () => {
               {loading ? 'Loading...' : (isLogin ? 'Login' : 'Sign Up')}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm">
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <Button variant="link" onClick={() => setIsLogin(!isLogin)} className="p-0 h-auto">
-              {isLogin ? 'Sign Up' : 'Login'}
-            </Button>
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <div>
+              {isLogin ? "Don't have an account? " : "Already have an account? "}
+              <Button variant="link" onClick={() => setIsLogin(!isLogin)} className="p-0 h-auto">
+                {isLogin ? 'Sign Up' : 'Login'}
+              </Button>
+            </div>
+            <ResetPasswordDialog />
           </div>
         </CardContent>
       </Card>
