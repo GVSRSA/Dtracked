@@ -41,23 +41,43 @@ const AdminPasswordReset: React.FC = () => {
 
     setLoading(true);
     try {
-      // First, we need to get the user ID by email
+      // First, we need to get the user by email from the auth.users table
       const { data: userData, error: userError } = await supabase
         .from('profiles')
         .select('id')
         .eq('email', email)
         .single();
 
-      if (userError) throw userError;
-      if (!userData) throw new Error('User not found');
-
-      // Update the user's password using admin privileges
-      const { error } = await supabase.auth.admin.updateUserById(
-        userData.id,
-        { password: newPassword }
-      );
-
-      if (error) throw error;
+      if (userError) {
+        console.error('Error fetching user:', userError);
+        // Try alternative method to get user
+        const { data: authUsers, error: authError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', email);
+        
+        if (authError || !authUsers || authUsers.length === 0) {
+          throw new Error('User not found in either profiles or users table');
+        }
+        
+        // Update the user's password using admin privileges
+        const { error: updateError } = await supabase.auth.admin.updateUserById(
+          authUsers[0].id,
+          { password: newPassword }
+        );
+        
+        if (updateError) throw updateError;
+      } else if (!userData) {
+        throw new Error('User not found in profiles table');
+      } else {
+        // Update the user's password using admin privileges
+        const { error: updateError } = await supabase.auth.admin.updateUserById(
+          userData.id,
+          { password: newPassword }
+        );
+        
+        if (updateError) throw updateError;
+      }
       
       showSuccess('Password reset successfully!');
       // Reset form
@@ -65,6 +85,7 @@ const AdminPasswordReset: React.FC = () => {
       setNewPassword('');
       setConfirmPassword('');
     } catch (error: any) {
+      console.error('Password reset error:', error);
       showError(`Error resetting password: ${error.message}`);
     } finally {
       setLoading(false);

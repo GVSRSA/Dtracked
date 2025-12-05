@@ -29,7 +29,13 @@ const Login: React.FC = () => {
         setIsLogin(true);
       }
     } catch (error: any) {
-      showError(error.message);
+      console.error('Authentication error:', error);
+      // Provide more specific error messages
+      if (error.message.includes('Network Error') || error.message.includes('ERR_NAME_NOT_RESOLVED')) {
+        showError('Unable to connect to authentication service. Please check your internet connection.');
+      } else {
+        showError(error.message);
+      }
     } finally {
       setLoading(false);
     }
