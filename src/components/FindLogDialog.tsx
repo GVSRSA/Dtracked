@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { showSuccess, showError } from '@/utils/toast';
-import { v4 as uuidv4 } from 'uuid'; // Import uuid for unique filenames
+import { uploadImagesToStorage, getPublicUrlsForImages } from '@/utils/supabaseStorage';
 
 interface FindLogDialogProps {
   latitude: number | null;
@@ -36,7 +36,7 @@ const FindLogDialog: React.FC<FindLogDialogProps> = ({ latitude, longitude, onFi
   const [siteName, setSiteName] = useState('');
   const [siteType, setSiteType] = useState<string>('Please Choose');
   const [customSiteType, setCustomSiteType] = useState('');
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -45,49 +45,30 @@ const FindLogDialog: React.FC<FindLogDialogProps> = ({ latitude, longitude, onFi
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files).slice(0, 10); // Limit to 10 files
-      setSelectedFiles(e.target.files);
+      setSelectedFiles(files);
       const previews = files.map(file => URL.createObjectURL(file));
       setImagePreviews(previews);
     }
   };
 
   const uploadImages = async (userId: string) => {
-    if (!selectedFiles || selectedFiles.length === 0) {
+    if (selectedFiles.length === 0) {
       return [];
     }
 
-    const uploadedImageUrls: string[] = [];
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      const fileExtension = file.name.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExtension}`;
-      const filePath = `${userId}/${fileName}`; // Store images in a user-specific folder
-      console.log("Find Image Upload Path:", filePath); // Log upload path
-
-      const { data, error } = await supabase.storage
-        .from('find-images') // Use your bucket name
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (error) {
-        console.error('Error uploading image:', error);
-        showError(`Failed to upload image ${file.name}: ${error.message}`);
-        continue;
-      }
-
-      // Get public URL for the uploaded image
-      const { data: publicUrlData } = supabase.storage
-        .from('find-images')
-        .getPublicUrl(filePath);
-
-      if (publicUrlData) {
-        console.log("Uploaded Find Image Public URL:", publicUrlData.publicUrl); // Log public URL
-        uploadedImageUrls.push(publicUrlData.publicUrl);
-      }
+    try {
+      // Upload images and get file paths
+      const uploadedImagePaths = await uploadImagesToStorage(selectedFiles, userId, 'find-images');
+      
+      // Get public URLs for the uploaded images
+      const publicUrls = await getPublicUrlsForImages(uploadedImagePaths, 'find-images');
+      
+      return publicUrls;
+    } catch (error: any) {
+      console.error('Error uploading images:', error);
+      showError(`Failed to upload images: ${error.message}`);
+      return [];
     }
-    return uploadedImageUrls;
   };
 
   const handleSaveFind = async () => {
@@ -125,7 +106,7 @@ const FindLogDialog: React.FC<FindLogDialogProps> = ({ latitude, longitude, onFi
           description: description.trim() || null, // Description is optional
           site_name: siteName.trim() || null,
           site_type: siteType === 'Other' ? customSiteType.trim() : siteType,
-          image_urls: imageUrls,
+          image_urls: imageUrls.length > 0 ? imageUrls : null,
         },
       ]).select();
 
@@ -137,7 +118,7 @@ const FindLogDialog: React.FC<FindLogDialogProps> = ({ latitude, longitude, onFi
       setSiteName('');
       setSiteType('Please Choose');
       setCustomSiteType('');
-      setSelectedFiles(null);
+      setSelectedFiles([]);
       setImagePreviews([]);
       onFindLogged();
       setIsOpen(false);

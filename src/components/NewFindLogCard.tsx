@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { showSuccess, showError } from '@/utils/toast';
-import { v4 as uuidv4 } from 'uuid';
+import { uploadImagesToStorage, getPublicUrlsForImages } from '@/utils/supabaseStorage';
 import { XCircle } from 'lucide-react'; // Removed Chevron icons as collapsible is moved out
 import { CardContent } from '@/components/ui/card'; // Keep CardContent for styling
 
@@ -71,36 +71,19 @@ const NewFindLogCard: React.FC<NewFindLogCardProps> = ({ latitude, longitude, on
       return [];
     }
 
-    const uploadedImageUrls: string[] = [];
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      const fileExtension = file.name.split('.').pop();
-      const fileName = `${uuidv4()}.${fileExtension}`;
-      const filePath = `${userId}/${fileName}`; // Store images in a user-specific folder
-
-      const { data, error } = await supabase.storage
-        .from('find-images') // Use your bucket name
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (error) {
-        console.error('Error uploading image:', error);
-        showError(`Failed to upload image ${file.name}: ${error.message}`);
-        continue;
-      }
-
-      // Get public URL for the uploaded image
-      const { data: publicUrlData } = supabase.storage
-        .from('find-images')
-        .getPublicUrl(filePath);
-
-      if (publicUrlData) {
-        uploadedImageUrls.push(publicUrlData.publicUrl);
-      }
+    try {
+      // Upload images and get file paths
+      const uploadedImagePaths = await uploadImagesToStorage(selectedFiles, userId, 'find-images');
+      
+      // Get public URLs for the uploaded images
+      const publicUrls = await getPublicUrlsForImages(uploadedImagePaths, 'find-images');
+      
+      return publicUrls;
+    } catch (error: any) {
+      console.error('Error uploading images:', error);
+      showError(`Failed to upload images: ${error.message}`);
+      return [];
     }
-    return uploadedImageUrls;
   };
 
   const handleSaveFind = async () => {
@@ -138,7 +121,7 @@ const NewFindLogCard: React.FC<NewFindLogCardProps> = ({ latitude, longitude, on
           description: description.trim() || null,
           site_name: siteName.trim() || null,
           site_type: siteType === 'Other' ? customSiteType.trim() : siteType,
-          image_urls: imageUrls,
+          image_urls: imageUrls.length > 0 ? imageUrls : null,
         },
       ]).select();
 

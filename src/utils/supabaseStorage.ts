@@ -33,7 +33,7 @@ export const getSignedUrlsForImages = async (imageUrls: string[] | null, bucketN
       pathWithinBucket = imageUrl;
     }
 
-    console.log(`[supabaseStorage] Attempting to create signed URL for path: '${pathWithinBucket}' in bucket: '${bucketName}'`); // Added log
+    console.log(`[supabaseStorage] Attempting to create signed URL for path: '${pathWithinBucket}' in bucket: '${bucketName}'`);
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from(bucketName)
       .createSignedUrl(pathWithinBucket, 60 * 60); // URL valid for 1 hour
@@ -42,9 +42,71 @@ export const getSignedUrlsForImages = async (imageUrls: string[] | null, bucketN
       console.error(`[supabaseStorage] Error creating signed URL for image '${pathWithinBucket}' in bucket '${bucketName}':`, signedUrlError);
       results.push({ originalPath: pathWithinBucket, signedUrl: imageUrl }); // Fallback to original URL
     } else {
-      console.log(`[supabaseStorage] Successfully created signed URL for '${pathWithinBucket}': ${signedUrlData.signedUrl}`); // Added log
+      console.log(`[supabaseStorage] Successfully created signed URL for '${pathWithinBucket}': ${signedUrlData.signedUrl}`);
       results.push({ originalPath: pathWithinBucket, signedUrl: signedUrlData.signedUrl });
     }
   }
   return results;
+};
+
+/**
+ * Upload images to Supabase storage and return the file paths (not public URLs)
+ * @param files Array of File objects to upload
+ * @param userId User ID for folder organization
+ * @param bucketName Name of the storage bucket
+ * @returns Array of file paths within the bucket
+ */
+export const uploadImagesToStorage = async (files: File[], userId: string, bucketName: string): Promise<string[]> => {
+  if (files.length === 0) {
+    return [];
+  }
+
+  const uploadedImagePaths: string[] = [];
+  
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExtension}`;
+    const filePath = `${userId}/${fileName}`;
+
+    console.log(`[supabaseStorage] Uploading image to path: '${filePath}' in bucket: '${bucketName}'`);
+
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (error) {
+      console.error(`[supabaseStorage] Error uploading image to '${filePath}' in bucket '${bucketName}':`, error);
+      throw new Error(`Failed to upload image ${file.name}: ${error.message}`);
+    }
+    
+    uploadedImagePaths.push(filePath);
+  }
+  
+  return uploadedImagePaths;
+};
+
+/**
+ * Get public URLs for stored image paths
+ * @param imagePaths Array of file paths within the bucket
+ * @param bucketName Name of the storage bucket
+ * @returns Array of public URLs
+ */
+export const getPublicUrlsForImages = async (imagePaths: string[], bucketName: string): Promise<string[]> => {
+  const publicUrls: string[] = [];
+  
+  for (const imagePath of imagePaths) {
+    const { data: publicUrlData } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(imagePath);
+
+    if (publicUrlData) {
+      publicUrls.push(publicUrlData.publicUrl);
+    }
+  }
+  
+  return publicUrls;
 };
