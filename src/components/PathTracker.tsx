@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useWakeLock } from '@/hooks/use-wake-lock';
-import { showError, showSuccess } from '@/utils/toast';
+import { showError, showSuccess, showConfirmTrackingPrompt } from '@/utils/toast';
 
 interface PathTrackerProps {
   children: (path: [number, number][], isTracking: boolean) => React.ReactNode;
@@ -25,6 +25,101 @@ const PathTracker: React.FC<PathTrackerProps> = ({
   const [keepAwake, setKeepAwake] = useState(true);
   const { isSupported, isActive } = useWakeLock(keepAwake && isTracking);
 
+  // Prompt scheduling refs
+  const promptTimeoutRef = useRef<number | null>(null);
+  const promptIntervalRef = useRef<number | null>(null);
+  const nextPromptTimeRef = useRef<number | null>(null);
+  const promptCountRef = useRef<number>(0);
+
+  const clearPromptScheduling = () => {
+    if (promptTimeoutRef.current) {
+      clearTimeout(promptTimeoutRef.current);
+      promptTimeoutRef.current = null;
+    }
+    if (promptIntervalRef.current) {
+      clearInterval(promptIntervalRef.current);
+      promptIntervalRef.current = null;
+    }
+    promptCountRef.current = 0;
+  };
+
+  const showOnePrompt = () => {
+    showConfirmTrackingPrompt(
+      "You're still tracking this route. Continue?",
+      () => {
+        // User confirmed to continue
+        clearPromptScheduling();
+        nextPromptTimeRef.current = Date.now() + 60 * 60 * 1000; // next hour
+        scheduleHourlyCheck();
+        showSuccess("Continuing route tracking.");
+      },
+      () => {
+        // User chose to stop
+        clearPromptScheduling();
+        onStopTracking();
+      }
+    );
+  };
+
+  const scheduleHourlyCheck = () => {
+    // Clear any existing timeout before scheduling
+    if (promptTimeoutRef.current) {
+      clearTimeout(promptTimeoutRef.current);
+      promptTimeoutRef.current = null;
+    }
+
+    const now = Date.now();
+    const msUntilHour =
+      nextPromptTimeRef.current && nextPromptTimeRef.current > now
+        ? nextPromptTimeRef.current - now
+        : 60 * 60 * 1000;
+
+    promptTimeoutRef.current = window.setTimeout(() => {
+      // Start 5-minute prompt cycle: one notification per minute
+      promptCountRef.current = 0;
+      showOnePrompt();
+      promptCountRef.current++;
+
+      // Clear any prior interval
+      if (promptIntervalRef.current) {
+        clearInterval(promptIntervalRef.current);
+        promptIntervalRef.current = null;
+      }
+
+      promptIntervalRef.current = window.setInterval(() => {
+        if (!isTracking) {
+          clearPromptScheduling();
+          return;
+        }
+        if (promptCountRef.current >= 5) {
+          // No response in 5 minutes: stop and save
+          clearPromptScheduling();
+          onStopTracking();
+          return;
+        }
+        showOnePrompt();
+        promptCountRef.current++;
+      }, 60 * 1000);
+    }, msUntilHour);
+  };
+
+  useEffect(() => {
+    if (isTracking) {
+      // start scheduling if not set
+      if (!nextPromptTimeRef.current) {
+        nextPromptTimeRef.current = Date.now() + 60 * 60 * 1000;
+      }
+      scheduleHourlyCheck();
+    } else {
+      clearPromptScheduling();
+      nextPromptTimeRef.current = null;
+    }
+
+    return () => {
+      clearPromptScheduling();
+    };
+  }, [isTracking]);
+
   const handleStart = () => {
     if (keepAwake) {
       if (isSupported) {
@@ -39,8 +134,6 @@ const PathTracker: React.FC<PathTrackerProps> = ({
   const handleStop = () => {
     onStopTracking();
     if (isActive) {
-      // Hook will release automatically when enable becomes false (isTracking false),
-      // but we inform the user for clarity.
       showSuccess('Stopped tracking. Screen wake lock released.');
     }
   };

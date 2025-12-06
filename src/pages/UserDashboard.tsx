@@ -66,6 +66,7 @@ const UserDashboard: React.FC = () => {
   const [isTracking, setIsTracking] = useState(false);
   const [pathCoordinates, setPathCoordinates] = useState<[number, number][]>([]);
   const [watchId, setWatchId] = useState<number | null>(null);
+  const [lastPositionAt, setLastPositionAt] = useState<number | null>(null);
 
   const [isSaveRouteDialogOpen, setIsSaveRouteDialogOpen] = useState(false);
   const [routeToSave, setRouteToSave] = useState<{
@@ -215,10 +216,33 @@ const UserDashboard: React.FC = () => {
         setPathCoordinates((prevPath) => [...prevPath, [latitude, longitude]]);
         setCurrentLatitude(latitude);
         setCurrentLongitude(longitude);
+        setLastPositionAt(Date.now());
       },
       (error) => {
         showError(`Geolocation error: ${error.message}`);
-        setIsTracking(false);
+        // Attempt to re-establish watcher instead of stopping tracking
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          setWatchId(null);
+        }
+        const newId = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setPathCoordinates((prevPath) => [...prevPath, [latitude, longitude]]);
+            setCurrentLatitude(latitude);
+            setCurrentLongitude(longitude);
+            setLastPositionAt(Date.now());
+          },
+          (err) => {
+            showError(`Geolocation error: ${err.message}`);
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000,
+          }
+        );
+        setWatchId(newId);
       },
       {
         enableHighAccuracy: true,
@@ -227,7 +251,7 @@ const UserDashboard: React.FC = () => {
       }
     );
     setWatchId(id);
-  }, []);
+  }, [watchId]);
 
   const stopTracking = useCallback(() => {
     if (watchId !== null) {
@@ -247,6 +271,72 @@ const UserDashboard: React.FC = () => {
       }
     }
   }, [watchId, pathCoordinates, setRouteToSave, setIsSaveRouteDialogOpen]);
+
+  // Reacquire watcher when page becomes visible again if tracking
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isTracking && watchId === null) {
+        const id = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setPathCoordinates((prevPath) => [...prevPath, [latitude, longitude]]);
+            setCurrentLatitude(latitude);
+            setCurrentLongitude(longitude);
+            setLastPositionAt(Date.now());
+          },
+          (error) => {
+            showError(`Geolocation error: ${error.message}`);
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000,
+          }
+        );
+        setWatchId(id);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [isTracking, watchId]);
+
+  // Watchdog: if no position updates for a while, restart the watcher
+  useEffect(() => {
+    if (!isTracking) return;
+    const intervalId = window.setInterval(() => {
+      if (!lastPositionAt) return;
+      const staleMs = Date.now() - lastPositionAt;
+      // If we haven't received an update in 60s, restart the watcher
+      if (staleMs > 60_000) {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          setWatchId(null);
+        }
+        const id = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setPathCoordinates((prevPath) => [...prevPath, [latitude, longitude]]);
+            setCurrentLatitude(latitude);
+            setCurrentLongitude(longitude);
+            setLastPositionAt(Date.now());
+          },
+          (error) => {
+            showError(`Geolocation error: ${error.message}`);
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000,
+          }
+        );
+        setWatchId(id);
+      }
+    }, 30_000); // check every 30s
+
+    return () => clearInterval(intervalId);
+  }, [isTracking, lastPositionAt, watchId]);
 
   // Cleanup on component unmount
   useEffect(() => {
