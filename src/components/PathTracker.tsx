@@ -22,10 +22,10 @@ const PathTracker: React.FC<PathTrackerProps> = ({
     <div className="flex flex-col h-full">
       <div className="flex gap-2 mb-4">
         <Button onClick={onStartTracking} disabled={isTracking}>
-          Start Tracking Path
+          Start Tracking Route
         </Button>
         <Button onClick={onStopTracking} disabled={!isTracking} variant="outline">
-          Stop Tracking Path
+          Stop Tracking Route
         </Button>
       </div>
       <div className="flex-grow">

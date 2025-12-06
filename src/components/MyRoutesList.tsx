@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Added CardHeader, CardTitle
+import { CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import RouteDetailsModal from './RouteDetailsModal'; // Import the new modal
-import EditRouteDialog from './EditRouteDialog'; // Import the new dialog
-import { RefreshCw } from 'lucide-react'; // Import refresh icon
+import RouteDetailsModal from './RouteDetailsModal';
+import EditRouteDialog from './EditRouteDialog';
+import { RefreshCw } from 'lucide-react';
 
 interface Route {
   id: string;
@@ -20,14 +20,15 @@ interface Route {
   end_longitude: number;
   distance_km: number;
   route_path: [number, number][] | null;
-  images: string[] | null; // Added images field (these will be signed URLs)
+  images: string[] | null;
+  route_map_image: string | null; // New field for route map image
   created_at: string;
 }
 
 interface MyRoutesListProps {
   isLoading: boolean;
   routes: Route[];
-  onRouteUpdated: () => void; // New prop to trigger refetch
+  onRouteUpdated: () => void;
 }
 
 const MyRoutesList: React.FC<MyRoutesListProps> = ({ isLoading, routes, onRouteUpdated }) => {
@@ -47,13 +48,13 @@ const MyRoutesList: React.FC<MyRoutesListProps> = ({ isLoading, routes, onRouteU
   };
 
   const handleRouteEditedOrDeleted = () => {
-    onRouteUpdated(); // Trigger refetch in parent
-    setIsRouteDetailsModalOpen(false); // Close details modal if open
-    setIsEditRouteDialogOpen(false); // Close edit dialog if open
+    onRouteUpdated();
+    setIsRouteDetailsModalOpen(false);
+    setIsEditRouteDialogOpen(false);
   };
 
   const handleRefreshClick = () => {
-    onRouteUpdated(); // Trigger refetch in parent
+    onRouteUpdated();
   };
 
   if (isLoading) {
@@ -66,7 +67,7 @@ const MyRoutesList: React.FC<MyRoutesListProps> = ({ isLoading, routes, onRouteU
 
   return (
     <>
-      <CardHeader className="flex flex-row items-center justify-end space-y-0 p-4 pt-0"> {/* Added CardHeader for refresh button */}
+      <CardHeader className="flex flex-row items-center justify-end space-y-0 p-4 pt-0">
         <Button variant="ghost" size="icon" onClick={handleRefreshClick} disabled={isLoading}>
           <RefreshCw className="h-4 w-4" />
           <span className="sr-only">Refresh Routes</span>
@@ -81,13 +82,24 @@ const MyRoutesList: React.FC<MyRoutesListProps> = ({ isLoading, routes, onRouteU
               {routes.map((route, index) => (
                 <React.Fragment key={route.id}>
                   <div className="mb-4 flex items-center gap-4">
-                    {/* Display first image as thumbnail if available */}
-                    {route.images && route.images.length > 0 && (
+                    {/* Display route map image as thumbnail if available, otherwise use first regular image */}
+                    {route.route_map_image ? (
+                      <img
+                        src={route.route_map_image}
+                        alt="Route Map"
+                        className="w-20 h-20 object-cover rounded-md flex-shrink-0 cursor-pointer"
+                        onClick={() => handleRouteNameClick(route)}
+                      />
+                    ) : route.images && route.images.length > 0 ? (
                       <img
                         src={route.images[0]}
                         alt="Route thumbnail"
                         className="w-20 h-20 object-cover rounded-md flex-shrink-0"
                       />
+                    ) : (
+                      <div className="w-20 h-20 bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs text-gray-500">No Image</span>
+                      </div>
                     )}
                     <div className="flex-grow">
                       <button onClick={() => handleRouteNameClick(route)} className="text-left w-full">
@@ -100,6 +112,11 @@ const MyRoutesList: React.FC<MyRoutesListProps> = ({ isLoading, routes, onRouteU
                         <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
                           Distance: {route.distance_km.toFixed(2)} km
                         </p>
+                        {route.route_map_image && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                            Click map thumbnail to view route details
+                          </p>
+                        )}
                       </button>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => handleEditClick(route)} className="flex-shrink-0">

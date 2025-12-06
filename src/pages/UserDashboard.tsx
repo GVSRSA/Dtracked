@@ -17,8 +17,8 @@ import { LogOut, ChevronDown, ChevronUp } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import UserFindsPaginatedList from '@/components/UserFindsPaginatedList';
 import MyRoutesList from '@/components/MyRoutesList';
-import { getSignedUrlsForImages } from '@/utils/supabaseStorage'; // Import the new utility
-import { MadeWithDyad } from '@/components/made-with-dyad'; // Import MadeWithDyad
+import { getSignedUrlsForImages } from '@/utils/supabaseStorage';
+import { MadeWithDyad } from '@/components/made-with-dyad';
 
 interface Find {
   id: string;
@@ -50,7 +50,8 @@ interface Route {
   end_longitude: number;
   distance_km: number;
   route_path: [number, number][] | null;
-  images: string[] | null; // Added images field
+  images: string[] | null;
+  route_map_image: string | null; // New field for route map image
   created_at: string;
 }
 
@@ -75,10 +76,10 @@ const UserDashboard: React.FC = () => {
   } | null>(null);
 
   // Collapsible states for cards
-  const [isNewFindLogCardOpen, setIsNewFindLogCardOpen] = useState(false); // Start collapsed
-  const [isMapAndTrackingCardOpen, setIsMapAndTrackingCardOpen] = useState(true); // Start open
-  const [isMyRoutesCardOpen, setIsMyRoutesCardOpen] = useState(false); // Start collapsed
-  const [isMyFindsCardOpen, setIsMyFindsCardOpen] = useState(false); // Start collapsed
+  const [isNewFindLogCardOpen, setIsNewFindLogCardOpen] = useState(false);
+  const [isMapAndTrackingCardOpen, setIsMapAndTrackingCardOpen] = useState(true);
+  const [isMyRoutesCardOpen, setIsMyRoutesCardOpen] = useState(false);
+  const [isMyFindsCardOpen, setIsMyFindsCardOpen] = useState(false);
 
   // Fetch initial location once on component mount
   useEffect(() => {
@@ -150,7 +151,6 @@ const UserDashboard: React.FC = () => {
           };
         })
       );
-      console.log("[UserDashboard] Fetched finds for map:", findsWithSignedUrls); // Added log
       return findsWithSignedUrls;
     },
     enabled: !!user?.id,
@@ -163,7 +163,7 @@ const UserDashboard: React.FC = () => {
       if (!user?.id) return [];
       const { data: routesData, error } = await supabase
         .from('routes')
-        .select('*, images') // Select the new images column
+        .select('*, images, route_map_image') // Include the new route_map_image field
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -174,14 +174,20 @@ const UserDashboard: React.FC = () => {
 
       const routesWithSignedUrls = await Promise.all(
         (routesData || []).map(async (route) => {
+          // Get signed URLs for regular images
           const signedImageObjects = await getSignedUrlsForImages(route.images, 'route-images');
+          // Get signed URL for route map image
+          const routeMapSignedUrl = route.route_map_image 
+            ? (await getSignedUrlsForImages([route.route_map_image], 'route-images'))?.[0]?.signedUrl || null
+            : null;
+
           return {
             ...route,
             images: signedImageObjects ? signedImageObjects.map(obj => obj.signedUrl) : null,
+            route_map_image: routeMapSignedUrl,
           };
         })
       );
-      console.log("[UserDashboard] Fetched routes:", routesWithSignedUrls); // Added log
       return routesWithSignedUrls;
     },
     enabled: !!user?.id,
@@ -199,7 +205,7 @@ const UserDashboard: React.FC = () => {
       return;
     }
 
-    showSuccess('Starting location tracking...');
+    showSuccess('Starting route tracking...');
     setIsTracking(true);
     setPathCoordinates([]); // Clear path on new session
 
@@ -207,14 +213,12 @@ const UserDashboard: React.FC = () => {
       (position) => {
         const { latitude, longitude } = position.coords;
         setPathCoordinates((prevPath) => [...prevPath, [latitude, longitude]]);
-        setCurrentLatitude(latitude); // Directly update state
-        setCurrentLongitude(longitude); // Directly update state
+        setCurrentLatitude(latitude);
+        setCurrentLongitude(longitude);
       },
       (error) => {
         showError(`Geolocation error: ${error.message}`);
         setIsTracking(false);
-        // The cleanup useEffect will handle clearing the watch when watchId changes or component unmounts.
-        // No need for immediate clearWatch here.
       },
       {
         enableHighAccuracy: true,
@@ -230,7 +234,7 @@ const UserDashboard: React.FC = () => {
       navigator.geolocation.clearWatch(watchId);
       setWatchId(null);
       setIsTracking(false);
-      showSuccess('Location tracking stopped.');
+      showSuccess('Route tracking stopped.');
 
       if (pathCoordinates.length >= 2) {
         const startCoords = pathCoordinates[0];
@@ -254,12 +258,10 @@ const UserDashboard: React.FC = () => {
   }, [watchId]);
 
   const handleFindLogged = () => {
-    // Refetch finds for the map component when a new find is logged
     refetchFindsForMap();
-    // The UserFindsPaginatedList component will handle its own refetch internally
   };
 
-  const handleSaveRoute = async (name: string, description: string, imageUrls: string[]) => {
+  const handleSaveRoute = async (name: string, description: string, imageUrls: string[], routeMapImageUrl: string | null) => {
     if (!user || !routeToSave) {
       showError('Error: Route data missing or user not logged in.');
       return;
@@ -277,7 +279,8 @@ const UserDashboard: React.FC = () => {
           end_longitude: routeToSave.endCoords[1],
           distance_km: routeToSave.distance,
           route_path: routeToSave.path,
-          images: imageUrls.length > 0 ? imageUrls : null, // Save image URLs
+          images: imageUrls.length > 0 ? imageUrls : null,
+          route_map_image: routeMapImageUrl, // Save the route map image URL
         },
       ]);
 
@@ -286,8 +289,8 @@ const UserDashboard: React.FC = () => {
       showSuccess('Route saved successfully!');
       setIsSaveRouteDialogOpen(false);
       setRouteToSave(null);
-      setPathCoordinates([]); // Clear path after saving
-      refetchRoutes(); // Refetch routes to update the list
+      setPathCoordinates([]);
+      refetchRoutes();
     } catch (error: any) {
       showError(`Error saving route: ${error.message}`);
     }
@@ -356,7 +359,7 @@ const UserDashboard: React.FC = () => {
                 {isLoadingFindsForMap ? (
                   <div className="flex items-center justify-center flex-grow h-full">Loading finds...</div>
                 ) : (
-                  <div className="flex flex-col h-[500px]"> {/* Reverted height here */}
+                  <div className="flex flex-col h-[500px]">
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                       Your current location: {currentLatitude?.toFixed(6)}, {currentLongitude?.toFixed(6)}
                     </p>
@@ -367,13 +370,15 @@ const UserDashboard: React.FC = () => {
                       onStopTracking={stopTracking}
                     >
                       {(currentPathCoordinates, currentIsTracking) => (
-                        <MapComponent
-                          finds={findsForMap || []}
-                          pathCoordinates={currentPathCoordinates}
-                          isTracking={currentIsTracking}
-                          currentLatitude={currentLatitude}
-                          currentLongitude={currentLongitude}
-                        />
+                        <div id="map-container">
+                          <MapComponent
+                            finds={findsForMap || []}
+                            pathCoordinates={currentPathCoordinates}
+                            isTracking={currentIsTracking}
+                            currentLatitude={currentLatitude}
+                            currentLongitude={currentLongitude}
+                          />
+                        </div>
                       )}
                     </PathTracker>
                   </div>
@@ -411,14 +416,14 @@ const UserDashboard: React.FC = () => {
                   <Button variant="ghost" size="icon">
                     {isMyFindsCardOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     <span className="sr-only">{isMyFindsCardOpen ? 'Collapse' : 'Expand'}</span>
-                </Button>
-              </CollapsibleTrigger>
-            </CardHeader>
-            <CollapsibleContent>
-              <UserFindsPaginatedList userId={user.id} userProfile={profile} onMapRefresh={refetchFindsForMap} />
-            </CollapsibleContent>
-          </Collapsible>
-        </Card>
+                  </Button>
+                </CollapsibleTrigger>
+              </CardHeader>
+              <CollapsibleContent>
+                <UserFindsPaginatedList userId={user.id} userProfile={profile} onMapRefresh={refetchFindsForMap} />
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
         )}
       </div>
 
