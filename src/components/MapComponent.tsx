@@ -75,15 +75,23 @@ const MapControls: React.FC<{ latitude: number | null; longitude: number | null 
 };
 
 const MapComponent: React.FC<MapComponentProps> = ({ finds, pathCoordinates, isTracking, currentLatitude, currentLongitude }) => {
-  const defaultPosition: L.LatLngLiteral = { lat: -27.973611, lng: 26.756388 }; // Updated to requested coordinates
+  const [mapCenter, setMapCenter] = useState<L.LatLngLiteral>({ lat: 0, lng: 0 });
+  const [isLocationSet, setIsLocationSet] = useState(false);
 
-  // This should be inside the component to react to prop changes
-  const mapCenter: L.LatLngLiteral = (currentLatitude !== null && currentLongitude !== null)
-    ? { lat: currentLatitude, lng: currentLongitude }
-    : defaultPosition;
+  // Set map center to user's location when available
+  useEffect(() => {
+    if (currentLatitude !== null && currentLongitude !== null && !isLocationSet) {
+      setMapCenter({ lat: currentLatitude, lng: currentLongitude });
+      setIsLocationSet(true);
+      console.log("[MapComponent] Setting initial map center to user location:", { currentLatitude, currentLongitude });
+    }
+  }, [currentLatitude, currentLongitude, isLocationSet]);
+
+  // Fallback to a reasonable default if no location is available
+  const effectiveCenter: L.LatLngLiteral = isLocationSet ? mapCenter : { lat: 0, lng: 0 };
 
   return (
-    <MapContainer center={mapCenter} zoom={18} scrollWheelZoom={true} className="h-full w-[90%] mx-auto rounded-md">
+    <MapContainer center={effectiveCenter} zoom={18} scrollWheelZoom={true} className="h-full w-[90%] mx-auto rounded-md">
       <LayersControl position="topright">
         <LayersControl.BaseLayer checked name="OpenStreetMap">
           <TileLayer

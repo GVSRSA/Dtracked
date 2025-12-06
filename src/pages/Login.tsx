@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { supabase } from '@/integrations/supabase/client';
 import { showSuccess, showError } from '@/utils/toast';
 import ResetPasswordDialog from '@/components/ResetPasswordDialog';
-import AdminPasswordReset from './AdminPasswordReset';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -44,7 +43,6 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
       <div className="w-full max-w-md">
-        <AdminPasswordReset />
         <Card>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">{isLogin ? 'Login' : 'Sign Up'}</CardTitle>
