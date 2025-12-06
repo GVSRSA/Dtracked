@@ -82,11 +82,18 @@ const MapComponent: React.FC<MapComponentProps> = ({ finds, pathCoordinates, isT
     }
   }, [currentLatitude, currentLongitude, isLocationSet]);
 
-  const effectiveCenter: L.LatLngLiteral = isLocationSet ? mapCenter : { lat: 0, lng: 0 };
+  // Fallback to a reasonable default if no location is available
+  const effectiveCenter: L.LatLngLiteral = isLocationSet ? mapCenter : { lat: 51.505, lng: -0.09 }; // London as fallback
 
   return (
-    <div id="map-container">
-      <MapContainer center={effectiveCenter} zoom={18} scrollWheelZoom={true} className="h-full w-[90%] mx-auto rounded-md">
+    <div id="map-container" className="h-full w-full">
+      <MapContainer 
+        center={effectiveCenter} 
+        zoom={18} 
+        scrollWheelZoom={true} 
+        className="h-full w-full rounded-md"
+        style={{ height: '100%', width: '100%', minHeight: '400px' }}
+      >
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="OpenStreetMap">
             <TileLayer
